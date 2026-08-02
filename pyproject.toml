@@ -1,0 +1,74 @@
+[project]
+name = "layoutrag"
+version = "0.1.0"
+description = "Compare chunking strategies for RAG over real PDFs — see what each one retrieves, and why."
+readme = "README.md"
+requires-python = ">=3.11,<4"
+license = { text = "Apache-2.0" }
+
+# Kept deliberately small. Anything heavy, slow, or license-encumbered
+# lives behind an extra so the default install stays quick to stand up.
+dependencies = [
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "pypdfium2>=4",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Everything needed to actually run a pipeline end to end.
+run = [
+    "openai>=1.40",
+    "qdrant-client>=1.9",
+    "llama-index-core>=0.11",
+    "sentence-transformers>=3.0",
+    "tiktoken>=0.7",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+# Structure-aware parsing. Pulled out because it downloads layout models
+# on first use and is ~100x slower per page than pypdfium2.
+structure = [
+    "docling>=2",
+]
+# Scoring and the defaults study.
+eval = [
+    "pandas>=2.2",
+    "pyarrow>=16",
+    "rapidfuzz>=3.9",
+]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[project.scripts]
+layoutrag = "layoutrag.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/layoutrag"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests"]
+# Third-party packages here ship no type information.
+[[tool.mypy.overrides]]
+module = ["pypdfium2.*", "docling.*", "qdrant_client.*", "llama_index.*", "sentence_transformers.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

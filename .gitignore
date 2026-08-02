@@ -1,0 +1,36 @@
+# Client work — never committed
+clients/
+
+# Corpora are fetched, never committed
+data/
+corpora/
+*.pdf
+
+# Caches produced by the pipeline
+.cache/
+.layoutrag_cache/
+qdrant_storage/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+.idea/
+*.swp
