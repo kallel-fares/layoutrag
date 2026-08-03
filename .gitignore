@@ -34,3 +34,4 @@ htmlcov/
 .DS_Store
 .idea/
 *.swp
+.layoutrag_spend.json
