@@ -59,6 +59,41 @@ QUESTIONS = {
 MIN_SPAN_CHARS = 80
 
 
+def _identity(row: pd.Series) -> str:
+    """A short phrase naming the contract, for the query to anchor on.
+
+    Prefers the document title plus the named parties, since that is how someone actually
+    asks: "in the Acme distribution agreement, what is the termination notice period?"
+    Falls back to whichever of the two is present.
+    """
+    title = _first(row.get("Document Name"))
+    parties = _list(row.get("Parties"))
+    # Party lists mix legal names with short forms and role labels ("MA", "Licensor").
+    # The long entries are the ones that identify a company.
+    named = [p for p in parties if len(p) > 8][:2]
+
+    if title and named:
+        return f"{title} between {' and '.join(named)}"
+    return title or (" and ".join(named) if named else "")
+
+
+def _first(cell: object) -> str:
+    values = _list(cell)
+    return values[0] if values else ""
+
+
+def _list(cell: object) -> list[str]:
+    if not isinstance(cell, str) or len(cell) < 3:
+        return []
+    try:
+        value = ast.literal_eval(cell)
+    except (ValueError, SyntaxError):
+        return []
+    if not isinstance(value, list):
+        return []
+    return [str(v).strip() for v in value if str(v).strip()]
+
+
 def spans(cell: object) -> list[str]:
     if not isinstance(cell, str) or len(cell) < 4:
         return []
@@ -94,13 +129,20 @@ def main() -> int:
         for _, row in df.iterrows():
             found = spans(row[category])
             if found:
-                candidates.append((str(row["Filename"]), found))
+                candidates.append((str(row["Filename"]), _identity(row), found))
 
         rng.shuffle(candidates)
-        for filename, found in candidates[: args.per_category]:
+        for filename, identity, found in candidates[: args.per_category]:
+            if not identity:
+                continue
             questions.append(
                 {
-                    "question": text,
+                    # The query has to say which contract it is about. Without that, one
+                    # template is a single vector searched against 510 contracts while the
+                    # gold span belongs to exactly one of them, so hitting it is chance —
+                    # measured at recall@10 = 0.027, which is what ~1/437 looks like.
+                    "question": f"{identity}: {text}",
+                    "base_question": text,
                     "category": category,
                     # Stems must match the PDF filenames the parser derives doc_id from.
                     "doc_id": Path(filename).stem,
