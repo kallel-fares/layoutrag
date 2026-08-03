@@ -35,3 +35,4 @@ htmlcov/
 .idea/
 *.swp
 .layoutrag_spend.json
+data/indexes/
