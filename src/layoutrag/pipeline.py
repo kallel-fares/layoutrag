@@ -12,11 +12,14 @@ the whole tool exists to show would be four times slower than it needs to be.
 from __future__ import annotations
 
 import os
+import sys
 import time
 from collections.abc import Sequence
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TextIO
 
 import numpy as np
 
@@ -113,11 +116,68 @@ def _parse_one(job: tuple[Parser, Path]) -> ParsedDoc:
     return parser.parse(path)
 
 
+class Progress:
+    """Single-line progress with an ETA, for work slow enough that silence looks like a hang.
+
+    docling takes about a minute per document. Without this, a sixty-document parse is an
+    hour of no output, which is indistinguishable from a crash — and that ambiguity is
+    exactly what makes someone kill a run that was working.
+
+    Writes to stderr and rewrites one line, so piping stdout to a file stays clean. Falls
+    back to one line per item when not attached to a terminal, since carriage returns in a
+    log file are unreadable.
+    """
+
+    def __init__(self, total: int, label: str = "parsing", stream: TextIO | None = None) -> None:
+        self.total = total
+        self.label = label
+        self.stream = stream if stream is not None else sys.stderr
+        self.done = 0
+        self.started = time.perf_counter()
+        self.interactive = hasattr(self.stream, "isatty") and self.stream.isatty()
+
+    def advance(self, name: str = "") -> None:
+        self.done += 1
+        elapsed = time.perf_counter() - self.started
+        rate = elapsed / self.done
+        remaining = rate * (self.total - self.done)
+        pct = 100.0 * self.done / self.total if self.total else 100.0
+
+        line = (
+            f"  {self.label}: {self.done}/{self.total} ({pct:.0f}%) "
+            f"· {_duration(elapsed)} elapsed · ~{_duration(remaining)} left"
+        )
+        if name:
+            line += f" · {name[:38]}"
+
+        if self.interactive:
+            self.stream.write(f"\r{line:<110}")
+        else:
+            self.stream.write(line + "\n")
+        self.stream.flush()
+
+    def finish(self) -> None:
+        elapsed = time.perf_counter() - self.started
+        message = f"  {self.label}: {self.done}/{self.total} in {_duration(elapsed)}"
+        prefix = "\r" if self.interactive else ""
+        self.stream.write(f"{prefix}{message:<110}\n")
+        self.stream.flush()
+
+
+def _duration(seconds: float) -> str:
+    if seconds < 90:
+        return f"{seconds:.0f}s"
+    if seconds < 5400:
+        return f"{seconds / 60:.1f}m"
+    return f"{seconds / 3600:.1f}h"
+
+
 def parse_corpus(
     paths: Sequence[Path],
     parser: Parser,
     cache: Cache | None = None,
     workers: int | None = None,
+    progress: bool = True,
 ) -> tuple[list[ParsedDoc], float]:
     """Parse documents in parallel, reusing cached parses.
 
@@ -145,16 +205,48 @@ def parse_corpus(
 
     if pending:
         count = workers or _default_workers(parser)
+        bar = Progress(len(pending), f"{parser.name}") if progress else None
+
         # One document is not worth the cost of spawning a process.
         if count == 1 or len(pending) == 1:
-            parsed_docs = [_parse_one((parser, path)) for _, path in pending]
+            for i, path in pending:
+                parsed = _parse_one((parser, path))
+                results[i] = parsed
+                cache.put("parse", hashes[i], params, parsed)
+                if bar:
+                    bar.advance(path.stem)
         else:
-            with ProcessPoolExecutor(max_workers=count) as pool:
-                parsed_docs = list(pool.map(_parse_one, [(parser, p) for _, p in pending]))
+            try:
+                with ProcessPoolExecutor(max_workers=count) as pool:
+                    # submit + as_completed rather than map, so progress reports when each
+                    # document actually finishes instead of when the whole batch does.
+                    futures = {
+                        pool.submit(_parse_one, (parser, path)): (i, path) for i, path in pending
+                    }
+                    for future in as_completed(futures):
+                        i, path = futures[future]
+                        parsed = future.result()
+                        results[i] = parsed
+                        cache.put("parse", hashes[i], params, parsed)
+                        if bar:
+                            bar.advance(path.stem)
+            except BrokenProcessPool:
+                # macOS spawns rather than forks, so worker processes re-import the calling
+                # module. From a REPL, a notebook, or a script piped through stdin there is
+                # no module to re-import and the pool dies before doing any work. Parsing
+                # serially is slower but always correct, and beats failing on the caller's
+                # execution context.
+                for i, path in pending:
+                    if i in results:
+                        continue
+                    parsed = _parse_one((parser, path))
+                    results[i] = parsed
+                    cache.put("parse", hashes[i], params, parsed)
+                    if bar:
+                        bar.advance(path.stem)
 
-        for (i, _), parsed in zip(pending, parsed_docs, strict=True):
-            results[i] = parsed
-            cache.put("parse", hashes[i], params, parsed)
+        if bar:
+            bar.finish()
 
     return [results[i] for i in range(len(paths))], time.perf_counter() - started
 
@@ -167,6 +259,7 @@ def build_index(
     cache: Cache | None = None,
     workers: int | None = None,
     dry_run: bool = False,
+    progress: bool = True,
 ) -> tuple[VectorIndex | None, IndexReport]:
     """Parse, chunk, embed, and index a corpus.
 
@@ -177,7 +270,7 @@ def build_index(
     cache = cache if cache is not None else Cache()
     report = IndexReport(documents=len(paths))
 
-    docs, report.parse_seconds = parse_corpus(paths, parser, cache, workers)
+    docs, report.parse_seconds = parse_corpus(paths, parser, cache, workers, progress)
     for doc in docs:
         report.pages += doc.page_count
         if doc.parse_failed:

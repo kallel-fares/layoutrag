@@ -26,7 +26,7 @@ from pathlib import Path
 
 from layoutrag.blocks import BlockType
 from layoutrag.budget import BudgetExceeded, SpendGuard
-from layoutrag.cache import Cache
+from layoutrag.cache import Cache, hash_file, hash_params
 from layoutrag.chunkers import ContextualHeadingChunker, FixedChunker
 from layoutrag.embedders import OpenAIEmbedder
 from layoutrag.parsers import DoclingParser, PdfiumFontSizeParser
@@ -54,10 +54,22 @@ def heading_stats(label: str, paths: list[Path], parser: object, cache: Cache) -
     )
 
 
+def uncached(paths: list[Path], parser: object, cache: Cache) -> list[Path]:
+    """Documents this parser has not already produced a cached parse for."""
+    params = hash_params(parser=parser.name)  # type: ignore[attr-defined]
+    return [p for p in paths if cache.get("parse", hash_file(p), params) is None]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--parse-only", action="store_true", help="no embedding, no cost")
     ap.add_argument("--limit", type=int)
+    ap.add_argument(
+        "--batch",
+        type=int,
+        help="parse at most this many not-yet-cached documents, then stop. "
+        "Re-run to continue: cached parses are reused, so nothing is repeated.",
+    )
     args = ap.parse_args()
 
     paths = sorted(NIST.glob("*.pdf"))
@@ -65,6 +77,28 @@ def main() -> int:
         paths = paths[: args.limit]
 
     cache = Cache()
+
+    if args.batch is not None:
+        # Parsing is per-document and content-hashed, so the work splits cleanly and
+        # resumes for free. Each invocation does a bounded amount and leaves the rest for
+        # the next one, which keeps a slow parser off a busy machine for hours at a time.
+        remaining = uncached(paths, DoclingParser(), cache)
+        # --batch 0 is a legitimate request: report what is left without parsing anything.
+        todo = remaining[: args.batch] if args.batch > 0 else []
+        if not todo:
+            print(f"{len(remaining)} of {len(paths)} documents still need a docling parse.")
+        else:
+            print(f"{len(remaining)} of {len(paths)} left; parsing {len(todo)} this batch")
+            started = time.perf_counter()
+            docs, _ = parse_corpus(todo, DoclingParser(), cache)
+            pages = sum(d.page_count for d in docs)
+            elapsed = time.perf_counter() - started
+            rate = f"{elapsed / pages:.2f}" if pages else "n/a"
+            print(f"  {len(docs)} docs / {pages} pages in {elapsed / 60:.1f} min ({rate} s/page)")
+            still = len(remaining) - len(todo)
+            print(f"  {still} documents still to parse" if still else "  parsing complete")
+        return 0
+
     print(f"{len(paths)} NIST documents\n")
     heading_stats("pypdfium2-fontsize", paths, PdfiumFontSizeParser(), cache)
     heading_stats("docling", paths, DoclingParser(), cache)
