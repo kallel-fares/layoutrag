@@ -86,7 +86,9 @@ class ContextualHeadingChunker:
             return []
 
         degraded = not doc.has_structure
-        indexed = list(enumerate(doc.blocks))
+        # Skip page furniture, matching what doc.text gives the fixed chunkers, so the
+        # strategies are compared on the same content rather than different content.
+        indexed = [(i, b) for i, b in enumerate(doc.blocks) if b.type is not BlockType.FOOTER]
         chunks: list[Chunk] = []
 
         for order, run in enumerate(_pack(indexed, self.chunk_tokens)):
@@ -131,7 +133,9 @@ class ParentDocChunker:
         self.child_tokens = child_tokens
         self.max_parent_tokens = max_parent_tokens
 
-    def _bounded_parent(self, section_text: str, child_text: str) -> str:
+    def _bounded_parent(
+        self, section_text: str, child_text: str, tokens: list[int] | None = None
+    ) -> str:
         """The section, trimmed to a window around the child when it is too long.
 
         An unbounded parent is not just wasteful, it corrupts the comparison. On documents
@@ -140,7 +144,8 @@ class ParentDocChunker:
         corpus for every hit and score near-perfect recall without retrieving anything well.
         """
         encoding = get_encoding()
-        tokens = encoding.encode(section_text)
+        if tokens is None:
+            tokens = encoding.encode(section_text)
         if len(tokens) <= self.max_parent_tokens:
             return section_text
 
@@ -171,6 +176,9 @@ class ParentDocChunker:
             first_index = section[0][0]
             path = doc.heading_path_at(first_index)
             pages = [block.page for _, block in section if block.page is not None]
+            # Encoded once per section rather than once per child: re-encoding a long
+            # section for every one of its children dominated chunking time.
+            section_tokens = get_encoding().encode(section_text)
 
             for child in _pack(section, self.child_tokens):
                 body = "\n\n".join(block.text for _, block in child).strip()
@@ -184,7 +192,7 @@ class ParentDocChunker:
                         embed_text=body,
                         # The section around the hit, so a precise match still returns the
                         # context it sits in — bounded, so it cannot return the document.
-                        return_text=self._bounded_parent(section_text, body),
+                        return_text=self._bounded_parent(section_text, body, section_tokens),
                         heading_path=path,
                         page_start=min(pages) if pages else None,
                         page_end=max(pages) if pages else None,
@@ -204,6 +212,8 @@ class ParentDocChunker:
         current: list[tuple[int, Block]] = []
 
         for index, block in enumerate(doc.blocks):
+            if block.type is BlockType.FOOTER:
+                continue
             if block.type is BlockType.HEADING and current:
                 sections.append(current)
                 current = []

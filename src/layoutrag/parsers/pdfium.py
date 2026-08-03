@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pypdfium2 as pdfium
 
-from layoutrag.blocks import Block, BlockType, ParsedDoc
+from layoutrag.blocks import Block, BlockType, ParsedDoc, mark_page_furniture
 
 # A text object must be this much larger than body text to read as a heading. Chosen from
 # the measured corpora: NIST bodies sit at 9-12pt with headings at 11-16pt, so a 15% margin
@@ -63,6 +63,15 @@ _SPACE_GAP = 0.25
 
 _WORD = re.compile(r"[A-Za-z0-9]")
 
+# Front matter is set in large type but is not section structure: DOI lines, author lists,
+# publication dates. Treating them as headings puts "2018June" and a URL into the heading
+# path of every chunk beneath them.
+_NOT_A_HEADING = re.compile(r"https?://|doi\.org|@|\bavailable free of charge\b", re.IGNORECASE)
+
+# Only the largest few sizes above body text are plausible section levels. Cover pages carry
+# many one-off display sizes, and without a cap each becomes its own heading level.
+MAX_HEADING_LEVELS = 4
+
 
 def _looks_like_heading(text: str) -> bool:
     """Reject things that are merely set in large type but aren't headings.
@@ -72,8 +81,14 @@ def _looks_like_heading(text: str) -> bool:
     """
     if len(text) > MAX_HEADING_CHARS:
         return False
+    if _NOT_A_HEADING.search(text):
+        return False
     word_chars = len(_WORD.findall(text))
     if word_chars < 2:
+        return False
+    # Mostly digits and punctuation: a date line or a page number, not a section title.
+    letters = sum(1 for ch in text if ch.isalpha())
+    if letters < 3 or letters / len(text) < 0.4:
         return False
     return word_chars / len(text) >= 0.5
 
@@ -178,7 +193,7 @@ class PdfiumParser:
             doc_id=path.stem,
             source_path=str(path),
             parser=self.name,
-            blocks=tuple(blocks),
+            blocks=tuple(mark_page_furniture(blocks, page_count)),
             page_count=page_count,
         )
 
@@ -242,7 +257,7 @@ class PdfiumFontSizeParser:
             doc_id=path.stem,
             source_path=str(path),
             parser=self.name,
-            blocks=tuple(blocks),
+            blocks=tuple(mark_page_furniture(blocks, page_count)),
             page_count=page_count,
         )
 
@@ -314,4 +329,4 @@ class PdfiumFontSizeParser:
         """Map each above-body font size to a heading level, largest size = level 1."""
         threshold = body_size * HEADING_SIZE_RATIO
         sizes = sorted({size for _, size, _ in spans if size >= threshold}, reverse=True)
-        return {size: level for level, size in enumerate(sizes, start=1)}
+        return {size: level for level, size in enumerate(sizes[:MAX_HEADING_LEVELS], start=1)}

@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from layoutrag.blocks import Block, BlockType, ParsedDoc
+from layoutrag.blocks import Block, BlockType, ParsedDoc, mark_page_furniture
 
 # docling's own label vocabulary, mapped onto ours. Anything unlisted becomes OTHER rather
 # than being silently dropped, so an unexpected label shows up in the block counts instead
@@ -119,7 +119,7 @@ class DoclingParser:
             doc_id=path.stem,
             source_path=str(path),
             parser=self.name,
-            blocks=tuple(blocks),
+            blocks=tuple(mark_page_furniture(blocks, page_count)),
             page_count=page_count,
         )
 
