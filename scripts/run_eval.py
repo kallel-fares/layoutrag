@@ -22,7 +22,10 @@ from layoutrag.eval import GoldSpan, score_query, score_run
 from layoutrag.index import VectorIndex
 
 INDEX_DIR = Path("data/indexes")
-QUESTIONS = Path("data/questions_cuad.json")
+QUESTIONS_FOR = {
+    "cuad": Path("data/questions_cuad.json"),
+    "nist": Path("data/questions_nist.json"),
+}
 RESULTS = Path("results")
 
 
@@ -38,7 +41,7 @@ def main() -> int:
     ap.add_argument("--budget", type=int, default=4000)
     args = ap.parse_args()
 
-    questions = json.loads(QUESTIONS.read_text())
+    questions = json.loads(QUESTIONS_FOR[args.corpus].read_text())
     indexes = sorted(INDEX_DIR.glob(f"{args.corpus}__*.pkl"))
     if not indexes:
         print(f"No indexes for {args.corpus} — run scripts/build_indexes.py first")
