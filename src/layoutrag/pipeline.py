@@ -29,9 +29,48 @@ from layoutrag.index import VectorIndex
 from layoutrag.parsers.base import Parser
 
 
-def _default_workers() -> int:
-    # Leave a core free so the machine stays usable during a long parse.
-    return max(1, (os.cpu_count() or 4) - 1)
+def _default_workers(parser: Parser | None = None) -> int:
+    """Worker count, bounded by how much memory *this parser* needs per process.
+
+    One number cannot serve both parsers, and assuming it could is what made a laptop
+    unusable. Each worker is a separate process with its own address space:
+
+    - ``pypdfium2`` holds a document, tens of megabytes, so parallelism is bounded by cores.
+    - ``docling`` holds torch and its layout models. Two workers measured at 3306 MB and
+      2981 MB resident — 6.3 GB on an 8 GB machine, which drove swap to 20.6 GB of 21.5 GB
+      and left the kernel thrashing at 103% CPU.
+
+    So docling runs single-process by default. It is slower in theory and faster in
+    practice, because a machine in swap does no useful work.
+
+    ``LAYOUTRAG_WORKERS`` overrides, for a machine with the memory to spare.
+    """
+    override = os.environ.get("LAYOUTRAG_WORKERS")
+    if override and override.isdigit() and int(override) > 0:
+        return int(override)
+
+    cores = max(1, (os.cpu_count() or 4) - 1)
+
+    try:
+        total_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (ValueError, OSError, AttributeError):
+        return 1
+
+    per_worker = _memory_per_worker(parser)
+    by_memory = int(total_bytes / per_worker) - 1
+    return max(1, min(cores, by_memory))
+
+
+def _memory_per_worker(parser: Parser | None) -> float:
+    """Resident memory to budget per worker process, in bytes.
+
+    Model-loading parsers are identified by name rather than by type so a client's own
+    heavyweight parser can opt in without importing anything from here.
+    """
+    name = getattr(parser, "name", "") or ""
+    if "docling" in name or "marker" in name or "unstructured" in name:
+        return 6.0 * 1024**3  # measured ~3 GB resident, doubled for headroom
+    return 1.5 * 1024**3
 
 
 @dataclass
@@ -105,7 +144,7 @@ def parse_corpus(
             pending.append((i, path))
 
     if pending:
-        count = workers or _default_workers()
+        count = workers or _default_workers(parser)
         # One document is not worth the cost of spawning a process.
         if count == 1 or len(pending) == 1:
             parsed_docs = [_parse_one((parser, path)) for _, path in pending]
