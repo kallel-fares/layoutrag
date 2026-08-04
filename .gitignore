@@ -36,3 +36,6 @@ htmlcov/
 *.swp
 .layoutrag_spend.json
 data/indexes/
+
+# Local Claude Code settings, machine-specific
+.claude/settings.local.json
