@@ -26,10 +26,10 @@ from pathlib import Path
 
 DEFAULT_LEDGER = Path(".layoutrag_spend.json")
 
-# Low on purpose. The whole planned study costs a few dollars, so anything approaching
-# these numbers means something is wrong, not that the work grew.
+# Low on purpose. The whole study has cost under a dollar, so anything approaching these
+# numbers means something is wrong, not that the work grew.
 DEFAULT_MAX_USD_PER_RUN = 1.00
-DEFAULT_MAX_USD_TOTAL = 10.00
+DEFAULT_MAX_USD_TOTAL = 3.00
 
 
 class BudgetExceeded(RuntimeError):

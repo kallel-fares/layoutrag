@@ -68,8 +68,29 @@ def main() -> int:
     # Built once and reused across arms: the model load dominates, and reloading it per
     # arm would multiply a one-off cost by the number of strategies.
     reranker = CrossEncoderReranker() if args.rerank else NoReranker()
+
+    # Which form of the question the reranker gets.
+    #
+    # A cross-encoder compares the query against each candidate directly, so anything in the
+    # query that matches every candidate equally just dilutes the signal. Retrieval queries
+    # here carry a document-title prefix so the vector stage knows which document to search,
+    # and on NIST removing that prefix before reranking is worth 22 points (0.346 -> 0.570).
+    #
+    # But the prefix is only noise when the question already identifies the answer on its
+    # own. CUAD's 300 questions come from 20 templates, so 15 questions share each bare
+    # question and it cannot say which of 510 near-identical contracts is meant. Strip it
+    # there and the reranker picks well-written clauses from the wrong documents.
+    #
+    # So the rule is not "strip the prefix", it is "give the reranker the most specific form
+    # available", detected from the question set itself.
+    bases = [q.get("base_question") or q["question"] for q in questions]
+    base_is_specific = len(set(bases)) >= 0.9 * len(set(texts))
+    rerank_key = "base_question" if base_is_specific else "question"
     if args.rerank:
-        print(f"reranking with {reranker.name}, depth {DEFAULT_DEPTH}")
+        print(
+            f"reranking with {reranker.name}, depth {DEFAULT_DEPTH}, "
+            f"query={rerank_key} ({len(set(bases))} distinct of {len(questions)})"
+        )
 
     RESULTS.mkdir(exist_ok=True)
     rows = []
@@ -89,12 +110,7 @@ def main() -> int:
             per_query = []
             for question, vector in zip(questions, query_vectors, strict=True):
                 gold = [GoldSpan(text=g, doc_id=question["doc_id"]) for g in question["gold"]]
-                # The reranker gets the user's actual question, not the augmented
-                # retrieval query. The document-title prefix helps the vector stage find
-                # the right document and actively hurts the cross-encoder, which scores
-                # the pair directly: measured at 0.570 nDCG on the question against 0.346
-                # on the retrieval query, versus 0.436 for no reranking at all.
-                rerank_query = question.get("base_question") or question["question"]
+                rerank_query = question.get(rerank_key) or question["question"]
                 if budget is None:
                     # Retrieve wide, then let the cross-encoder pick. Without reranking the
                     # depth collapses to k, so the control arm is unaffected.
