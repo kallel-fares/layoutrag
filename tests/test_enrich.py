@@ -116,3 +116,29 @@ def test_estimate_scales_with_window_and_costs_nothing_to_compute() -> None:
     assert small.chunks == large.chunks == 10
     assert large.tokens_in > small.tokens_in
     assert small.usd > 0
+
+
+def test_budget_exceeded_escapes_the_error_handler() -> None:
+    """A ceiling must stop a run, not be absorbed by the per-chunk error handling.
+
+    enrich() deliberately swallows failures so one bad chunk does not end a corpus run.
+    Without this carve-out that same handler eats BudgetExceeded, and the run keeps
+    spending past the limit while looking healthy.
+    """
+    import pytest
+
+    from layoutrag.budget import BudgetExceeded, SpendGuard
+
+    class _Overspends:
+        responses = property(lambda self: self)
+
+        def create(self, **_: object) -> object:
+            usage = type("U", (), {"input_tokens": 10_000_000, "output_tokens": 0})()
+            return type("R", (), {"output_text": "x", "usage": usage})()
+
+    guard = SpendGuard(max_usd_per_run=0.01)
+    enricher = ContextualEnricher(api_key="test", guard=guard)
+    enricher._client = _Overspends()
+
+    with pytest.raises(BudgetExceeded):
+        enricher.enrich(_chunk(), DOC)

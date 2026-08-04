@@ -85,7 +85,7 @@ def main() -> int:
         print("\nRe-run with --yes to proceed.")
         return 0
 
-    enricher = ContextualEnricher(window_tokens=args.window)
+    enricher = ContextualEnricher(window_tokens=args.window, guard=guard)
     bar = Progress(len(chunks), "enriching")
 
     def one(chunk: Chunk) -> Chunk:
@@ -113,7 +113,7 @@ def main() -> int:
         for chunk in [c for c in enriched if c.is_enriched][:3]:
             print(f"    {chunk.embed_text.split(chr(10))[0][:110]}")
 
-    embedder = OpenAIEmbedder(guard=SpendGuard())
+    embedder = OpenAIEmbedder(guard=guard)
     vectors = embedder.embed([c.embed_text for c in enriched])
     index = VectorIndex(enriched, np.asarray(vectors))
 
@@ -124,7 +124,8 @@ def main() -> int:
 
     print(f"\nwrote {target}")
     print(f"embedding cost: ${embedder.usd_spent:.4f}")
-    print(f"ledger total: ${SpendGuard().history().total_usd:.4f}")
+    guard.commit()
+    print(f"ledger total: ${guard.history().total_usd:.4f}")
     return 0
 
 

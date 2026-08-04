@@ -25,6 +25,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from layoutrag.budget import BudgetExceeded, SpendGuard
 from layoutrag.chunk_type import Chunk
 from layoutrag.chunkers.base import get_encoding
 
@@ -122,9 +123,15 @@ class ContextualEnricher:
         model: str = DEFAULT_MODEL,
         window_tokens: int = DEFAULT_WINDOW_TOKENS,
         api_key: str | None = None,
+        guard: SpendGuard | None = None,
     ) -> None:
         self.model = model
         self.window_tokens = window_tokens
+        # Every stage that can spend has to report to the same ledger. Tracking spend
+        # locally and never recording it leaves a cumulative ceiling that silently misses
+        # a whole stage, which reads as safe while being blind. This one went unrecorded
+        # for a $1.09 run before it was caught.
+        self.guard = guard if guard is not None else SpendGuard()
         self._client: Any | None = None
 
         if api_key is None:
@@ -164,8 +171,14 @@ class ContextualEnricher:
 
         usage = getattr(response, "usage", None)
         if usage is not None:
-            self.tokens_in += getattr(usage, "input_tokens", 0)
-            self.tokens_out += getattr(usage, "output_tokens", 0)
+            tokens_in = getattr(usage, "input_tokens", 0)
+            tokens_out = getattr(usage, "output_tokens", 0)
+            self.tokens_in += tokens_in
+            self.tokens_out += tokens_out
+            spent = tokens_in / 1e6 * PRICE_IN + tokens_out / 1e6 * PRICE_OUT
+            # Recorded per call, so a run that drifts past the ceiling stops partway
+            # instead of being discovered afterwards.
+            self.guard.record(spent, tokens_in + tokens_out)
 
         return (response.output_text or "").strip().replace("\n", " ")
 
@@ -178,6 +191,11 @@ class ContextualEnricher:
         """
         try:
             line = self.blurb(chunk, document_text)
+        except BudgetExceeded:
+            # Must escape. The broad catch below exists so one failed call does not end a
+            # corpus run, and it would otherwise swallow the ceiling and let the run
+            # continue spending past it.
+            raise
         except Exception:
             return chunk
 
