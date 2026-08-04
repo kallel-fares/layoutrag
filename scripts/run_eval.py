@@ -58,16 +58,32 @@ def main() -> int:
     # change between strategies, so re-embedding per arm would multiply cost by the number
     # of arms for no reason.
     embedder = OpenAIEmbedder()
-    texts = [q["question"] for q in questions]
-    unique = sorted(set(texts))
-    print(f"embedding {len(unique)} distinct questions (of {len(texts)})")
-    vectors = embedder.embed(unique)
-    by_text = dict(zip(unique, vectors, strict=True))
-    query_vectors = np.array([by_text[t] for t in texts])
 
     # Built once and reused across arms: the model load dominates, and reloading it per
     # arm would multiply a one-off cost by the number of strategies.
     reranker = CrossEncoderReranker() if args.rerank else NoReranker()
+
+    # Which form of the question the corpus is scored with.
+    #
+    # Questions here can carry a document-title prefix so the vector stage knows which
+    # document to search. Whether that prefix belongs depends entirely on the corpus, and
+    # forcing one form on both was a measurement error that inverted a published result.
+    #
+    # CUAD's 300 questions come from 20 templates. Without the contract name they cannot
+    # say which of 510 near-identical agreements is meant, and recall@10 falls to 0.027,
+    # which is chance. The prefix is the question there.
+    #
+    # NIST's 95 questions are hand-written and self-contained. The prefix is boilerplate
+    # that matches document front matter, and removing it is worth between +5 and +32
+    # points depending on strategy. It also changes which strategy wins: anchored ranks
+    # contextual-heading first, bare ranks parent-doc first by a wide margin.
+    #
+    # So each corpus is scored in the form a user would actually type for it, and the
+    # effect of the choice is reported as a finding in its own right.
+    bases_for_search = [q.get("base_question") or q["question"] for q in questions]
+    search_is_specific = len(set(bases_for_search)) >= 0.9 * len(questions)
+    search_key = "base_question" if search_is_specific else "question"
+    texts = [q.get(search_key) or q["question"] for q in questions]
 
     # Which form of the question the reranker gets.
     #
@@ -83,14 +99,14 @@ def main() -> int:
     #
     # So the rule is not "strip the prefix", it is "give the reranker the most specific form
     # available", detected from the question set itself.
-    bases = [q.get("base_question") or q["question"] for q in questions]
-    base_is_specific = len(set(bases)) >= 0.9 * len(set(texts))
-    rerank_key = "base_question" if base_is_specific else "question"
+    rerank_key = search_key
+    unique = sorted(set(texts))
+    print(f"query form: {search_key} ({len(unique)} distinct of {len(questions)})")
+    vectors = embedder.embed(unique)
+    by_text = dict(zip(unique, vectors, strict=True))
+    query_vectors = np.array([by_text[t] for t in texts])
     if args.rerank:
-        print(
-            f"reranking with {reranker.name}, depth {DEFAULT_DEPTH}, "
-            f"query={rerank_key} ({len(set(bases))} distinct of {len(questions)})"
-        )
+        print(f"reranking with {reranker.name}, depth {DEFAULT_DEPTH}")
 
     RESULTS.mkdir(exist_ok=True)
     rows = []
@@ -136,6 +152,7 @@ def main() -> int:
                     "corpus": args.corpus,
                     "strategy": strategy,
                     "reranker": reranker.name,
+                    "query_form": search_key,
                     "scoring": label,
                     "queries": metrics.queries,
                     "recall_at_1": metrics.recall_at_1,
