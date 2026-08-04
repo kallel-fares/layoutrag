@@ -25,6 +25,7 @@ INDEX_DIR = Path("data/indexes")
 QUESTIONS_FOR = {
     "cuad": Path("data/questions_cuad.json"),
     "nist": Path("data/questions_nist.json"),
+    "nistdocling": Path("data/questions_nist.json"),
 }
 RESULTS = Path("results")
 

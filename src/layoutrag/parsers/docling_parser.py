@@ -18,6 +18,32 @@ from typing import Any
 
 from layoutrag.blocks import Block, BlockType, ParsedDoc, mark_page_furniture
 
+# Below this share of what plain extraction finds, a docling parse is recorded as failed
+# rather than quietly returning a fraction of the document. Matches the pdfium guard.
+MIN_TEXT_RETENTION = 0.70
+
+
+def _plain_text_length(path: Path) -> int:
+    """Characters plain extraction recovers, as the yardstick for what docling missed."""
+    import pypdfium2 as pdfium
+
+    try:
+        pdf = pdfium.PdfDocument(path)
+    except Exception:
+        return 0
+    total = 0
+    try:
+        for page_no in range(len(pdf)):
+            page = pdf[page_no]
+            textpage = page.get_textpage()
+            total += len(textpage.get_text_bounded().strip())
+            textpage.close()
+            page.close()
+    finally:
+        pdf.close()
+    return total
+
+
 # docling's own label vocabulary, mapped onto ours. Anything unlisted becomes OTHER rather
 # than being silently dropped, so an unexpected label shows up in the block counts instead
 # of quietly shrinking the document.
@@ -104,6 +130,29 @@ class DoclingParser:
             )
 
         page_count = len(getattr(document, "pages", ()) or ())
+
+        # Measured against plain extraction, docling returned 79.2% of the text across this
+        # corpus — median 86% per document, and 17.4% on the worst one — while reporting
+        # success every time. Layout-model output is a classification of regions, and
+        # regions it does not classify simply do not appear, so text loss is silent by
+        # construction. Recording the shortfall keeps it visible in results instead of
+        # showing up as unexplained low recall.
+        recovered = sum(len(b.text) for b in blocks)
+        plain = _plain_text_length(path)
+        if plain and recovered < plain * MIN_TEXT_RETENTION:
+            retained = f"{100 * recovered / plain:.0f}%"
+            return ParsedDoc(
+                doc_id=path.stem,
+                source_path=str(path),
+                parser=self.name,
+                blocks=tuple(mark_page_furniture(blocks, page_count)),
+                page_count=page_count,
+                parse_failed=True,
+                failure_reason=(
+                    f"docling recovered only {retained} of the text plain extraction finds "
+                    f"({recovered:,} of {plain:,} characters)"
+                ),
+            )
 
         if not blocks:
             return ParsedDoc(
