@@ -20,6 +20,7 @@ import numpy as np
 from layoutrag.embedders import OpenAIEmbedder
 from layoutrag.eval import GoldSpan, score_query, score_run
 from layoutrag.index import VectorIndex
+from layoutrag.rerank import DEFAULT_DEPTH, CrossEncoderReranker, NoReranker
 
 INDEX_DIR = Path("data/indexes")
 QUESTIONS_FOR = {
@@ -40,6 +41,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus", default="cuad")
     ap.add_argument("--budget", type=int, default=4000)
+    ap.add_argument(
+        "--rerank",
+        action="store_true",
+        help=f"pull {DEFAULT_DEPTH} candidates and reorder with a local cross-encoder",
+    )
     args = ap.parse_args()
 
     questions = json.loads(QUESTIONS_FOR[args.corpus].read_text())
@@ -59,6 +65,12 @@ def main() -> int:
     by_text = dict(zip(unique, vectors, strict=True))
     query_vectors = np.array([by_text[t] for t in texts])
 
+    # Built once and reused across arms: the model load dominates, and reloading it per
+    # arm would multiply a one-off cost by the number of strategies.
+    reranker = CrossEncoderReranker() if args.rerank else NoReranker()
+    if args.rerank:
+        print(f"reranking with {reranker.name}, depth {DEFAULT_DEPTH}")
+
     RESULTS.mkdir(exist_ok=True)
     rows = []
 
@@ -77,11 +89,21 @@ def main() -> int:
             per_query = []
             for question, vector in zip(questions, query_vectors, strict=True):
                 gold = [GoldSpan(text=g, doc_id=question["doc_id"]) for g in question["gold"]]
-                hits = (
-                    index.search(vector, k=10)
-                    if budget is None
-                    else index.search_token_budget(vector, budget=budget)
-                )
+                # The reranker gets the user's actual question, not the augmented
+                # retrieval query. The document-title prefix helps the vector stage find
+                # the right document and actively hurts the cross-encoder, which scores
+                # the pair directly: measured at 0.570 nDCG on the question against 0.346
+                # on the retrieval query, versus 0.436 for no reranking at all.
+                rerank_query = question.get("base_question") or question["question"]
+                if budget is None:
+                    # Retrieve wide, then let the cross-encoder pick. Without reranking the
+                    # depth collapses to k, so the control arm is unaffected.
+                    depth = DEFAULT_DEPTH if args.rerank else 10
+                    hits = reranker.rerank(rerank_query, index.search(vector, depth), 10)
+                else:
+                    hits = index.search_token_budget(vector, budget=budget)
+                    if args.rerank:
+                        hits = reranker.rerank(rerank_query, hits, len(hits))
                 per_query.append(score_query(question["question"], hits, gold))
 
             metrics = score_run(per_query)
@@ -97,6 +119,7 @@ def main() -> int:
                 {
                     "corpus": args.corpus,
                     "strategy": strategy,
+                    "reranker": reranker.name,
                     "scoring": label,
                     "queries": metrics.queries,
                     "recall_at_1": metrics.recall_at_1,
@@ -111,7 +134,8 @@ def main() -> int:
                 }
             )
 
-    out = RESULTS / f"{args.corpus}.json"
+    suffix = "-rerank" if args.rerank else ""
+    out = RESULTS / f"{args.corpus}{suffix}.json"
     out.write_text(json.dumps(rows, indent=2))
     print(f"\nwritten to {out}")
     print(f"query embedding cost: ${embedder.usd_spent:.4f}")
