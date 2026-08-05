@@ -1,6 +1,7 @@
 # layoutrag
 
-**A RAG pipeline that audits itself on your documents.**
+**A RAG pipeline for document collections. Advanced techniques and settings, measured on
+your own files.**
 
 Every RAG recommendation is published as a universal rule. Add a reranker. Use heading-aware
 chunking. Use a layout-aware parser. Measured across two different document sets, each of
