@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="559" viewBox="0 0 780 559" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="780" height="559" fill="#1a1a19"/>
+  <text x="176" y="34" fill="#ffffff" font-size="14.5" font-weight="600">Technical standards</text>
+  <text x="176" y="51" fill="#c3c2b7" font-size="11.5">NIST Special Publications, 60 documents</text>
+  <line x1="176.0" y1="70" x2="176.0" y2="262" stroke="#33322f" stroke-width="1"/>
+  <line x1="298.7" y1="70" x2="298.7" y2="262" stroke="#33322f" stroke-width="1"/>
+  <line x1="421.3" y1="70" x2="421.3" y2="262" stroke="#33322f" stroke-width="1"/>
+  <line x1="544.0" y1="70" x2="544.0" y2="262" stroke="#33322f" stroke-width="1"/>
+  <line x1="666.7" y1="70" x2="666.7" y2="262" stroke="#33322f" stroke-width="1"/>
+  <text x="164" y="87" fill="#ffffff" font-size="12" text-anchor="end">parent‑doc</text>
+  <path d="M176,70h450.973951912693a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-450.973951912693z" fill="#3987e5"/>
+  <text x="638.0" y="80.5" fill="#c3c2b7" font-size="10.5">0.742</text>
+  <path d="M176,85h268.4788179513631a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-268.4788179513631z" fill="#d95926"/>
+  <text x="455.5" y="95.5" fill="#c3c2b7" font-size="10.5">0.444</text>
+  <text x="164" y="128" fill="#ffffff" font-size="12" text-anchor="end">fixed</text>
+  <path d="M176,111h308.3110231059336a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-308.3110231059336z" fill="#3987e5"/>
+  <text x="495.3" y="121.5" fill="#c3c2b7" font-size="10.5">0.509</text>
+  <path d="M176,126h326.8484814811439a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-326.8484814811439z" fill="#d95926"/>
+  <text x="513.8" y="136.5" fill="#c3c2b7" font-size="10.5">0.539</text>
+  <text x="164" y="169" fill="#ffffff" font-size="12" text-anchor="end">contextual‑heading</text>
+  <path d="M176,152h295.7506860951242a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-295.7506860951242z" fill="#3987e5"/>
+  <text x="482.8" y="162.5" fill="#c3c2b7" font-size="10.5">0.489</text>
+  <path d="M176,167h343.6014813267774a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-343.6014813267774z" fill="#d95926"/>
+  <text x="530.6" y="177.5" fill="#c3c2b7" font-size="10.5">0.567</text>
+  <text x="164" y="210" fill="#ffffff" font-size="12" text-anchor="end">contextual‑llm</text>
+  <path d="M176,193h270.6716627199942a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-270.6716627199942z" fill="#3987e5"/>
+  <text x="457.7" y="203.5" fill="#c3c2b7" font-size="10.5">0.448</text>
+  <path d="M176,208h292.4722973345692a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-292.4722973345692z" fill="#d95926"/>
+  <text x="479.5" y="218.5" fill="#c3c2b7" font-size="10.5">0.483</text>
+  <text x="164" y="251" fill="#ffffff" font-size="12" text-anchor="end">fixed‑no‑overlap</text>
+  <path d="M176,234h270.26581156019375a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-270.26581156019375z" fill="#3987e5"/>
+  <text x="457.3" y="244.5" fill="#c3c2b7" font-size="10.5">0.447</text>
+  <path d="M176,249h301.87473856423065a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-301.87473856423065z" fill="#d95926"/>
+  <text x="488.9" y="259.5" fill="#c3c2b7" font-size="10.5">0.499</text>
+  <text x="176.0" y="273" fill="#c3c2b7" font-size="10" text-anchor="middle">0.0</text>
+  <text x="298.7" y="273" fill="#c3c2b7" font-size="10" text-anchor="middle">0.2</text>
+  <text x="421.3" y="273" fill="#c3c2b7" font-size="10" text-anchor="middle">0.4</text>
+  <text x="544.0" y="273" fill="#c3c2b7" font-size="10" text-anchor="middle">0.6</text>
+  <text x="666.7" y="273" fill="#c3c2b7" font-size="10" text-anchor="middle">0.8</text>
+  <text x="176" y="297" fill="#ffffff" font-size="14.5" font-weight="600">Commercial contracts</text>
+  <text x="176" y="314" fill="#c3c2b7" font-size="11.5">CUAD, 510 documents</text>
+  <line x1="176.0" y1="333" x2="176.0" y2="484" stroke="#33322f" stroke-width="1"/>
+  <line x1="298.7" y1="333" x2="298.7" y2="484" stroke="#33322f" stroke-width="1"/>
+  <line x1="421.3" y1="333" x2="421.3" y2="484" stroke="#33322f" stroke-width="1"/>
+  <line x1="544.0" y1="333" x2="544.0" y2="484" stroke="#33322f" stroke-width="1"/>
+  <line x1="666.7" y1="333" x2="666.7" y2="484" stroke="#33322f" stroke-width="1"/>
+  <text x="164" y="350" fill="#ffffff" font-size="12" text-anchor="end">parent‑doc</text>
+  <path d="M176,333h392.68532188188624a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-392.68532188188624z" fill="#3987e5"/>
+  <text x="579.7" y="343.5" fill="#c3c2b7" font-size="10.5">0.647</text>
+  <path d="M176,348h299.95775330698126a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-299.95775330698126z" fill="#d95926"/>
+  <text x="487.0" y="358.5" fill="#c3c2b7" font-size="10.5">0.496</text>
+  <text x="164" y="391" fill="#ffffff" font-size="12" text-anchor="end">fixed</text>
+  <path d="M176,374h278.84850587779374a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-278.84850587779374z" fill="#3987e5"/>
+  <text x="465.8" y="384.5" fill="#c3c2b7" font-size="10.5">0.461</text>
+  <path d="M176,389h206.14240116053998a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-206.14240116053998z" fill="#d95926"/>
+  <text x="393.1" y="399.5" fill="#c3c2b7" font-size="10.5">0.343</text>
+  <text x="164" y="432" fill="#ffffff" font-size="12" text-anchor="end">fixed‑no‑overlap</text>
+  <path d="M176,415h261.3196779163385a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-261.3196779163385z" fill="#3987e5"/>
+  <text x="448.3" y="425.5" fill="#c3c2b7" font-size="10.5">0.433</text>
+  <path d="M176,430h196.56876557053533a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-196.56876557053533z" fill="#d95926"/>
+  <text x="383.6" y="440.5" fill="#c3c2b7" font-size="10.5">0.327</text>
+  <text x="164" y="473" fill="#ffffff" font-size="12" text-anchor="end">contextual‑heading</text>
+  <path d="M176,456h248.07304675046453a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-248.07304675046453z" fill="#3987e5"/>
+  <text x="435.1" y="466.5" fill="#c3c2b7" font-size="10.5">0.411</text>
+  <path d="M176,471h175.77138551605253a4.0,4.0 0 0 1 4.0,4.0v5.0a4.0,4.0 0 0 1 -4.0,4.0h-175.77138551605253z" fill="#d95926"/>
+  <text x="362.8" y="481.5" fill="#c3c2b7" font-size="10.5">0.293</text>
+  <text x="176.0" y="495" fill="#c3c2b7" font-size="10" text-anchor="middle">0.0</text>
+  <text x="298.7" y="495" fill="#c3c2b7" font-size="10" text-anchor="middle">0.2</text>
+  <text x="421.3" y="495" fill="#c3c2b7" font-size="10" text-anchor="middle">0.4</text>
+  <text x="544.0" y="495" fill="#c3c2b7" font-size="10" text-anchor="middle">0.6</text>
+  <text x="666.7" y="495" fill="#c3c2b7" font-size="10" text-anchor="middle">0.8</text>
+  <rect x="176" y="512" width="11" height="11" rx="2.5" fill="#3987e5"/>
+  <text x="193" y="521" fill="#c3c2b7" font-size="11.5">without reranking</text>
+  <rect x="344" y="512" width="11" height="11" rx="2.5" fill="#d95926"/>
+  <text x="361" y="521" fill="#c3c2b7" font-size="11.5">with reranking</text>
+  <text x="176" y="543" fill="#c3c2b7" font-size="10.5">nDCG@10 at k=10. Higher is better. Each corpus scored in the query form a user would type.</text>
+</svg>
