@@ -15,16 +15,16 @@ for them.
 ## Overview
 
 ```bash
-uv run layoutrag cost  ./my-docs                      # price the audit, zero API calls
+uv run layoutrag cost  ./my-docs                      # price indexing, zero API calls
 uv run layoutrag query ./my-docs "what is the notice period?"
 uv run layoutrag query ./my-docs "..." --local        # fully offline, no key
 ```
 
 Runs on your machine. Your documents are never uploaded anywhere.
 
-The pipeline is a normal production RAG stack: parse, chunk, embed, index, search, rerank.
-Each stage carries several implementations and a measurement harness, so a configuration can
-be scored on your corpus before it is committed to.
+The pipeline covers parse, chunk, embed, index, search and rerank. Each stage ships several
+implementations and a scoring harness, so you can measure a configuration on your corpus
+before building on it.
 
 ---
 
@@ -38,16 +38,16 @@ the same choice helps one and harms the other.
   <img alt="nDCG@10 by chunking strategy, with and without reranking, on technical standards and commercial contracts" src="docs/results-light.svg" width="100%">
 </picture>
 
-Reranking is the clearest case. It gains up to 8 points on standards and loses 11 to 15 on
-contracts, and it takes 30 points off the best strategy on both.
-
 | Technique | Technical standards | Commercial contracts |
 |---|---|---|
 | Cross-encoder reranking, small chunks | +3 to +8 | **−11 to −12** |
-| Cross-encoder reranking, parent-doc | **−29.8** | **−15.1** |
+| Cross-encoder reranking, best strategy | **−29.8** | **−15.1** |
 | Heading-aware chunking | −2.0 | −4.9 |
 | Contextual LLM enrichment | −6.1 | not measured |
-| Layout-model parsing | **−13.1** | not applicable |
+| Layout-model parsing | −2.7 to +0.5 | not applicable |
+
+Reranking is the clearest case. It gains up to 8 points on standards, loses 11 to 15 on
+contracts, and removes 30 points from the best configuration on both.
 
 Scores are nDCG@10, 0 to 1. Full data in [`results/`](results/).
 
@@ -58,66 +58,88 @@ the other, with no signal that anything was off. Retrieval degrades quietly.
 
 ## Findings
 
+### Chunking
+
+`parent-doc` embeds a small span for precision and returns the section around it. It won on
+both document sets by a wide margin.
+
+| Strategy | Technical standards | Commercial contracts |
+|---|---|---|
+| **parent-doc** | **0.742** | **0.647** |
+| fixed | 0.509 | 0.461 |
+| contextual-heading | 0.489 | 0.411 |
+| contextual-llm | 0.448 | not measured |
+| fixed-no-overlap | 0.447 | 0.433 |
+
+Heading-aware chunking, widely recommended, placed third on standards and third on
+contracts. On contracts it loses to plain fixed chunking by 5 points, because those PDFs are
+HTML conversions carrying no heading typography: 0.0 to 0.5% of text objects are set above
+body size. All 15,013 chunks are flagged as degraded before any score is computed, so the
+pipeline reports that case rather than producing a quiet null.
+
+`parent-doc` returns 20,479 median tokens against roughly 5,100 for the others. That cost is
+real, and it is examined under Retrieval depth below.
+
 ### Reranking
 
 A cross-encoder re-reads the top 50 results with the question in hand and reorders them. It
 runs locally at no per-query cost.
 
-| Document set | Without reranking | With reranking | Change |
-|---|---|---|---|
-| Technical standards | 0.436 | **0.570** | **+13.4** |
-| Commercial contracts | **0.460** | 0.343 | **−11.8** |
+| Strategy | Standards | Contracts |
+|---|---|---|
+| parent-doc | **−29.8** | **−15.1** |
+| fixed | +3.0 | −11.9 |
+| contextual-heading | +7.8 | −11.8 |
+| contextual-llm | +3.6 | not measured |
+| fixed-no-overlap | +5.2 | −10.6 |
 
-The direction holds across all four chunking strategies within each set, so this is a
-property of the documents.
+Reranking helps small-chunk strategies on standards by 3 to 8 points, harms every strategy
+on contracts by 11 to 15, and removes 30 points from the best configuration on both sets.
 
-Contracts repeat party names on nearly every page. A query naming the contract scores
-similarly against every chunk in it, and the clause-specific part of the question is
-diluted. Standards are topically distinct, so there is real signal to reorder on.
+Contracts repeat party names on nearly every page, so a query naming the contract scores
+similarly against every chunk in it and the clause-specific part is diluted. `parent-doc`
+suffers because its results are already whole sections, leaving a cross-encoder little to
+reorder and much to truncate.
 
-**The query passed to the reranker also matters.** On standards, reranking the padded search
-query scored 0.346 against 0.570 for the user's question. Search queries are padded with
+**The query passed to the reranker decides its sign.** On standards, reranking the padded
+search query scored 0.346 against 0.570 for the user's question. Search queries carry
 document identifiers to help the vector stage. A cross-encoder compares the query directly
 against each candidate, so that padding matches everything equally. The two queries are kept
 separate, and the correct form is selected from the question set at runtime.
 
-### Chunking
-
-Adding the enclosing section heading to each chunk before embedding.
-
-| Document set | Heading-aware | Plain fixed | Change |
-|---|---|---|---|
-| Standards, real heading formatting | **0.436** | 0.353 | **+8.3** |
-| Contracts converted from HTML | 0.411 | **0.460** | **−4.9** |
-
-The contracts carry no heading typography, measured at 0.0 to 0.5% of text objects set above
-body size. All 15,013 chunks were flagged as degraded before any score was computed, so the
-pipeline identifies this case in advance.
-
 ### Parsing
 
-docling, an ML layout model, against font-size heading detection.
+docling, an ML layout model, against heading detection from font metrics.
 
-| Parser | Score | Headings found | Text recovered | Speed |
-|---|---|---|---|---|
-| Font-size detection | **0.436** | 478 | 100% | 0.004 s/page |
-| docling | 0.305 | 6,579 | 79.2% | 1.03 s/page |
+| Parser | contextual-heading | fixed | Headings found | Text recovered | Speed |
+|---|---|---|---|---|---|
+| Font metrics | 0.489 | **0.509** | 478 | 100% | **0.004 s/page** |
+| docling | **0.494** | 0.482 | 6,579 | 79.2% | 1.03 s/page |
 
-docling identified 13.8x more headings and scored 13.1 points lower. It recovers 79.2% of
-the text a basic reader finds, median 86% per document and 17.4% at worst, while reporting
-success on every document. Retrieval cannot return an answer that was never indexed.
+docling identifies 13.8x more headings and finishes level, within a point either way.
 
-On born-digital PDFs, font metrics already present in the file outperformed a parser 258x
-slower requiring 1 GB of additional dependencies. Its applicable case is scanned documents,
-which this audit did not cover.
+It also recovers 79.2% of the text plain extraction finds, median 86% per document and 17.4%
+at worst, while reporting success on every document. Retrieval cannot return an answer that
+was never indexed, so the parser now records a shortfall below 70% as a failure.
+
+For born-digital PDFs the question is what 258x the runtime and 1 GB of additional
+dependencies buy. Measured here, a tie. Its applicable case is scanned documents, which this
+audit did not cover.
 
 ### Retrieval depth
 
-One chunking strategy led at k=10 while returning 3.5x more text than the others. Scored at
-a fixed token budget, its recall fell from 0.772 to 0.381.
+`parent-doc` leads at k=10 while returning 3.5x the context. Holding every strategy to the
+same token budget is what separates retrieving well from spending more.
 
-Every configuration is scored both ways, so a strategy cannot win by spending more context
-than its alternatives.
+| Standards, 4000-token budget | Score | Tokens returned |
+|---|---|---|
+| **parent-doc** | **0.600** | 2,048 |
+| contextual-heading | 0.483 | 3,784 |
+| fixed | 0.477 | 3,584 |
+
+On standards it wins both ways, and leads on quality per token returned. On contracts its
+recall falls from 0.772 to 0.381 once the budget is fixed, so the win there is bought with
+context. Every configuration is scored both ways for this reason.
 
 ---
 
@@ -138,9 +160,12 @@ uv run layoutrag query ./my-docs "a real question from your business"
 Indexes under several chunking strategies simultaneously and returns what each retrieved,
 with scores and the document structure behind them.
 
-Supplying labelled questions runs the full scoring harness and produces the tables above for
-your corpus. Parsing and chunking are cached by content hash, so comparing configurations
-does not reprocess documents.
+Parsing and chunking are cached by content hash, so comparing configurations does not
+reprocess your documents.
+
+Producing the scored tables above for your own corpus needs labelled questions, which
+currently means a JSON file in the format under `data/` and a run of
+`scripts/run_eval.py`. There is no command for it yet.
 
 ---
 
@@ -188,8 +213,9 @@ that. Differences of 2 to 3 points are indicative.
 
 ## Cost
 
-**$0.73** for the full audit: two document sets, 10 indexes, 112,000 chunks, 32.4M tokens.
-Projected at $0.6471 before any API call, actual 1.8% above.
+**$1.88** for everything measured here: two document sets, 11 indexes, 117,000 chunks,
+39M tokens embedded, and one LLM enrichment pass over 4,606 chunks. The largest single run
+was projected at $1.1073 and came in at $1.0939.
 
 Spending controls are enforced in code:
 
